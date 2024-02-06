@@ -1,0 +1,74 @@
+version: '3'
+
+services:
+  
+  postgresql:
+    build:
+      context: ./postgresql
+    env_file:
+      - .env
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    networks:
+      - petnetwork
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+
+  gunicorn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: gunicorn -c gunicorn.conf.py videostore.videostore.wsgi:application
+    env_file:
+      - .env
+    depends_on:
+      - postgresql
+    networks:
+      - petnetwork
+
+  proxysql:
+    build:
+      context: ./proxysql
+    ports:
+      - "6033:6033"
+      - "6032:6032"
+    networks:
+      - petnetwork
+    depends_on:
+      - gunicorn
+      - postgresql
+
+  
+  videostore:
+    build:
+      context: ./internet_shop
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    networks:
+      - petnetwork
+    depends_on:
+      - proxysql
+      - postgresql
+      - gunicorn
+
+  nginx:
+    build:
+      context: ./nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - gunicorn
+    networks:
+      - petnetwork
+
+networks:
+  petnetwork:
+    driver: bridge
